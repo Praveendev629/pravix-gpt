@@ -1,6 +1,7 @@
+
 "use client";
 export const dynamic = 'force-dynamic';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth, googleProvider, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber } from '@/lib/firebase';
@@ -10,10 +11,10 @@ import { Mail, Phone, Eye, EyeOff, ArrowRight, ChevronDown } from 'lucide-react'
 
 const COUNTRY_CODES = [
   { code: '+91', label: 'IN', name: 'India' },
-  { code: '+1', label: 'US', name: 'United States' },
+  { code: '+1',  label: 'US', name: 'United States' },
   { code: '+44', label: 'GB', name: 'United Kingdom' },
   { code: '+61', label: 'AU', name: 'Australia' },
-  { code: '+971', label: 'AE', name: 'UAE' },
+  { code: '+971',label: 'AE', name: 'UAE' },
   { code: '+65', label: 'SG', name: 'Singapore' },
   { code: '+60', label: 'MY', name: 'Malaysia' },
   { code: '+49', label: 'DE', name: 'Germany' },
@@ -36,7 +37,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const recaptchaRef = useRef<any>(null);
 
-  // Google Sign In
+  // ── Google Sign In
   const handleGoogle = async () => {
     setLoading(true);
     try {
@@ -47,11 +48,14 @@ export default function LoginPage() {
       toast.success(`Welcome, ${data.user.name}!`);
       router.push('/chat');
     } catch (e: any) {
-      toast.error(e.response?.data?.error || 'Google sign-in failed');
-    } finally { setLoading(false); }
+      console.error('Google sign-in error:', e);
+      toast.error(e.response?.data?.error || e.message || 'Google sign-in failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Email auth
+  // ── Email auth
   const handleEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -64,10 +68,12 @@ export default function LoginPage() {
       router.push('/chat');
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Authentication failed');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Phone OTP
+  // ── Phone OTP
   const handleSendOTP = async () => {
     if (!phone || phone.length < 7) { toast.error('Enter a valid phone number'); return; }
     setLoading(true);
@@ -79,14 +85,15 @@ export default function LoginPage() {
       const confirmation = await signInWithPhoneNumber(auth, fullPhone, recaptchaRef.current);
       sessionStorage.setItem('pravix_otp_confirm', 'pending');
       sessionStorage.setItem('pravix_phone', fullPhone);
-      // Store confirmation result via window (temporary)
       (window as any).__pravixOTPConfirm = confirmation;
       toast.success('OTP sent successfully');
       router.push('/auth/otp');
     } catch (e: any) {
       toast.error(e.message || 'Failed to send OTP');
       recaptchaRef.current = null;
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -106,10 +113,14 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-3xl font-black gradient-text">Pravix GPT</h1>
-          <p className="text-white/40 text-sm mt-1">{mode === 'signup' ? 'Create your account' : 'Welcome back'}</p>
+          <p className="text-white/40 text-sm mt-1">
+            {mode === 'signup' ? 'Create your account' : 'Welcome back'}
+          </p>
         </div>
 
+        {/* ── Single glass card (duplicate removed) ── */}
         <div className="glass rounded-2xl p-6">
+
           {/* Tab: Email / Phone */}
           <div className="flex bg-white/5 rounded-xl p-1 mb-6">
             <button onClick={() => setTab('email')}
@@ -127,31 +138,39 @@ export default function LoginPage() {
               {mode === 'signup' && (
                 <div>
                   <label className="text-xs text-white/50 mb-1 block">Full Name</label>
-                  <input className="input-field" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} required />
+                  <input className="input-field" placeholder="John Doe" value={name}
+                    onChange={e => setName(e.target.value)} required />
                 </div>
               )}
               <div>
                 <label className="text-xs text-white/50 mb-1 block">Email Address</label>
-                <input className="input-field" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
+                <input className="input-field" type="email" placeholder="you@example.com" value={email}
+                  onChange={e => setEmail(e.target.value)} required />
               </div>
               <div>
                 <label className="text-xs text-white/50 mb-1 block">Password</label>
                 <div className="relative">
-                  <input className="input-field pr-11" type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password} onChange={e => setPassword(e.target.value)} required minLength={8} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
+                  <input className="input-field pr-11" type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••" value={password}
+                    onChange={e => setPassword(e.target.value)} required minLength={8} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70">
                     {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
                   </button>
                 </div>
               </div>
 
               <button type="submit" disabled={loading} className="btn-primary w-full mt-2">
-                {loading ? <span className="flex gap-1"><span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/></span>
+                {loading
+                  ? <span className="flex gap-1"><span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/></span>
                   : <><ArrowRight size={16}/>{mode === 'signup' ? 'Create Account' : 'Sign In'}</>}
               </button>
 
               <p className="text-center text-white/40 text-sm">
                 {mode === 'signup' ? 'Already have an account? ' : "Don't have an account? "}
-                <button type="button" onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')} className="text-purple-400 hover:text-purple-300 font-medium">
+                <button type="button"
+                  onClick={() => setMode(mode === 'signup' ? 'login' : 'signup')}
+                  className="text-purple-400 hover:text-purple-300 font-medium">
                   {mode === 'signup' ? 'Sign In' : 'Sign Up'}
                 </button>
               </p>
@@ -170,7 +189,8 @@ export default function LoginPage() {
                     {showCountries && (
                       <div className="absolute top-full left-0 mt-1 w-52 glass rounded-xl py-1 z-50 max-h-48 overflow-y-auto">
                         {COUNTRY_CODES.map(c => (
-                          <button key={c.code} onClick={() => { setCountryCode(c.code); setShowCountries(false); }}
+                          <button key={c.code}
+                            onClick={() => { setCountryCode(c.code); setShowCountries(false); }}
                             className="w-full text-left px-4 py-2 text-sm hover:bg-white/10 flex gap-2">
                             <span className="font-bold text-purple-400">{c.label}</span>
                             <span className="text-white/60">{c.code}</span>
@@ -179,12 +199,14 @@ export default function LoginPage() {
                       </div>
                     )}
                   </div>
-                  <input className="input-field flex-1" type="tel" placeholder="9876543210" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} />
+                  <input className="input-field flex-1" type="tel" placeholder="9876543210"
+                    value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, ''))} />
                 </div>
               </div>
 
               <button onClick={handleSendOTP} disabled={loading} className="btn-primary w-full">
-                {loading ? <span className="flex gap-1"><span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/></span>
+                {loading
+                  ? <span className="flex gap-1"><span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/></span>
                   : <><Phone size={16}/> Send OTP</>}
               </button>
             </div>
