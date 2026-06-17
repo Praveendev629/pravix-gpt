@@ -15,25 +15,35 @@ export default function UsernamePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!username.trim() || username.trim().length < 2) { toast.error('Username must be at least 2 characters'); return; }
+    if (!username.trim() || username.trim().length < 2) {
+      toast.error('Username must be at least 2 characters');
+      return;
+    }
     setLoading(true);
     try {
       const idToken = sessionStorage.getItem('pravix_firebase_token');
       if (!idToken) { router.replace('/auth/login'); return; }
 
-      // chatUsername is session-only and NOT stored in DB
       const { data } = await api.post('/api/auth/firebase', {
         idToken,
         chatUsername: username.trim(),
       });
 
+      if (!data?.token || !data?.user) {
+        toast.error('Login failed: Invalid response from server');
+        return;
+      }
+
       login(data.token, data.user, username.trim());
       sessionStorage.removeItem('pravix_firebase_token');
       toast.success(`Welcome, ${username}!`);
-      router.push('/chat');
+      // Hard redirect to avoid Next.js App Router race condition
+      window.location.href = '/chat';
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Something went wrong');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -51,7 +61,6 @@ export default function UsernamePage() {
         </div>
 
         <div className="glass rounded-2xl p-6">
-          {/* Info notice */}
           <div className="flex gap-2 bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 mb-5">
             <Info size={15} className="text-purple-400 shrink-0 mt-0.5"/>
             <p className="text-white/60 text-xs">This name is only used during your current chat session and is not stored permanently.</p>
@@ -73,7 +82,8 @@ export default function UsernamePage() {
             </div>
 
             <button type="submit" disabled={loading || !username.trim()} className="btn-primary w-full">
-              {loading ? <span className="flex gap-1"><span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/></span>
+              {loading
+                ? <span className="flex gap-1"><span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/></span>
                 : <><ArrowRight size={16}/> Continue to Pravix GPT</>}
             </button>
           </form>

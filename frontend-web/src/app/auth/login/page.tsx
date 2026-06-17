@@ -36,13 +36,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const recaptchaRef = useRef<any>(null);
 
+  // ── Hard redirect helper — forces a fresh page load so AuthContext
+  // re-reads localStorage reliably (avoids Next.js App Router race condition)
+  const redirectToChat = () => {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/chat';
+    }
+  };
+
   // ── Google Sign In
   const handleGoogle = async () => {
     setLoading(true);
     try {
       // Step 1: Firebase Google OAuth
       const result = await signInWithPopup(auth, googleProvider);
-      const idToken = await result.user.getIdToken(/* forceRefresh */ true);
+      const idToken = await result.user.getIdToken(true);
 
       // Step 2: Exchange Firebase ID token for app JWT
       let data: any;
@@ -50,7 +58,6 @@ export default function LoginPage() {
         const res = await api.post('/api/auth/firebase', { idToken });
         data = res.data;
       } catch (apiErr: any) {
-        // Surface the actual backend error message to help debugging
         const backendMsg =
           apiErr?.response?.data?.error ||
           apiErr?.response?.data?.message ||
@@ -61,21 +68,29 @@ export default function LoginPage() {
         return;
       }
 
-      // Step 3: Persist auth state and redirect
+      // Step 3: Validate backend response before storing
+      if (!data?.token || !data?.user) {
+        console.error('Invalid backend response:', data);
+        toast.error('Login failed: Invalid response from server');
+        setLoading(false);
+        return;
+      }
+
+      // Step 4: Persist auth and hard-redirect to chat
       login(data.token, data.user, data.user.name);
       toast.success(`Welcome, ${data.user.name}!`);
-      router.push('/chat');
+      // Use window.location for hard redirect — prevents auth race condition
+      // in Next.js App Router where router.push can navigate before state settles
+      redirectToChat();
     } catch (e: any) {
-      // Firebase-level errors (popup closed, network, etc.)
       const msg =
         e?.code === 'auth/popup-closed-by-user'
           ? 'Popup was closed. Please try again.'
           : e?.code === 'auth/network-request-failed'
           ? 'Network error. Check your connection.'
           : e?.message || 'Google sign-in failed';
-      console.error('Google sign-in Firebase error:', e);
+      console.error('Google sign-in error:', e);
       toast.error(msg);
-    } finally {
       setLoading(false);
     }
   };
@@ -88,9 +103,15 @@ export default function LoginPage() {
       const endpoint = mode === 'signup' ? '/api/auth/signup' : '/api/auth/login';
       const payload = mode === 'signup' ? { name, email, password } : { email, password };
       const { data } = await api.post(endpoint, payload);
+
+      if (!data?.token || !data?.user) {
+        toast.error('Login failed: Invalid response from server');
+        return;
+      }
+
       login(data.token, data.user);
       toast.success(`Welcome${mode === 'signup' ? ' to Pravix GPT' : ' back'}!`);
-      router.push('/chat');
+      redirectToChat();
     } catch (e: any) {
       toast.error(e.response?.data?.error || 'Authentication failed');
     } finally {
@@ -143,9 +164,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* ── Single glass card ── */}
         <div className="glass rounded-2xl p-6">
-
           {/* Tab: Email / Phone */}
           <div className="flex bg-white/5 rounded-xl p-1 mb-6">
             <button onClick={() => setTab('email')}

@@ -30,28 +30,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('pravix_token');
-    const savedUser = localStorage.getItem('pravix_user');
-    const savedChatUser = sessionStorage.getItem('pravix_chat_username');
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      setUser(JSON.parse(savedUser));
-      if (savedChatUser) setChatUsernameState(savedChatUser);
+    try {
+      const savedToken = localStorage.getItem('pravix_token');
+      const savedUser = localStorage.getItem('pravix_user');
+      const savedChatUser = sessionStorage.getItem('pravix_chat_username');
+
+      // Guard against literal "null" or "undefined" strings stored in localStorage
+      const isValidToken = savedToken && savedToken !== 'null' && savedToken !== 'undefined';
+      const isValidUser = savedUser && savedUser !== 'null' && savedUser !== 'undefined';
+
+      if (isValidToken && isValidUser) {
+        const parsedUser = JSON.parse(savedUser);
+        // Also ensure parsed user is actually an object (not null)
+        if (parsedUser && typeof parsedUser === 'object' && parsedUser.id) {
+          setToken(savedToken);
+          setUser(parsedUser);
+          if (savedChatUser && savedChatUser !== 'null') {
+            setChatUsernameState(savedChatUser);
+          } else {
+            setChatUsernameState(parsedUser.name || null);
+          }
+        } else {
+          // Corrupted data — clear it
+          localStorage.removeItem('pravix_token');
+          localStorage.removeItem('pravix_user');
+          sessionStorage.removeItem('pravix_chat_username');
+        }
+      }
+    } catch (err) {
+      // If JSON.parse fails, clear corrupted storage
+      console.error('Failed to restore auth state:', err);
+      localStorage.removeItem('pravix_token');
+      localStorage.removeItem('pravix_user');
+      sessionStorage.removeItem('pravix_chat_username');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const login = (t: string, u: User, cu?: string) => {
+    // Validate before storing to prevent corrupted state
+    if (!t || !u || !u.id) {
+      console.error('login() called with invalid data:', { t, u });
+      return;
+    }
     localStorage.setItem('pravix_token', t);
     localStorage.setItem('pravix_user', JSON.stringify(u));
     setToken(t);
     setUser(u);
-    if (cu) {
-      sessionStorage.setItem('pravix_chat_username', cu);
-      setChatUsernameState(cu);
-    } else {
-      sessionStorage.setItem('pravix_chat_username', u.name);
-      setChatUsernameState(u.name);
+    const displayName = cu || u.name;
+    if (displayName) {
+      sessionStorage.setItem('pravix_chat_username', displayName);
+      setChatUsernameState(displayName);
     }
   };
 
