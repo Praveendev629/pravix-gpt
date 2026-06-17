@@ -1,4 +1,3 @@
-
 "use client";
 export const dynamic = 'force-dynamic';
 import { useState, useRef } from 'react';
@@ -41,15 +40,41 @@ export default function LoginPage() {
   const handleGoogle = async () => {
     setLoading(true);
     try {
+      // Step 1: Firebase Google OAuth
       const result = await signInWithPopup(auth, googleProvider);
-      const idToken = await result.user.getIdToken();
-      const { data } = await api.post('/api/auth/firebase', { idToken });
+      const idToken = await result.user.getIdToken(/* forceRefresh */ true);
+
+      // Step 2: Exchange Firebase ID token for app JWT
+      let data: any;
+      try {
+        const res = await api.post('/api/auth/firebase', { idToken });
+        data = res.data;
+      } catch (apiErr: any) {
+        // Surface the actual backend error message to help debugging
+        const backendMsg =
+          apiErr?.response?.data?.error ||
+          apiErr?.response?.data?.message ||
+          apiErr?.message;
+        console.error('Backend /api/auth/firebase error:', backendMsg, apiErr);
+        toast.error(`Login failed: ${backendMsg || 'Could not reach backend'}`);
+        setLoading(false);
+        return;
+      }
+
+      // Step 3: Persist auth state and redirect
       login(data.token, data.user, data.user.name);
       toast.success(`Welcome, ${data.user.name}!`);
       router.push('/chat');
     } catch (e: any) {
-      console.error('Google sign-in error:', e);
-      toast.error(e.response?.data?.error || e.message || 'Google sign-in failed');
+      // Firebase-level errors (popup closed, network, etc.)
+      const msg =
+        e?.code === 'auth/popup-closed-by-user'
+          ? 'Popup was closed. Please try again.'
+          : e?.code === 'auth/network-request-failed'
+          ? 'Network error. Check your connection.'
+          : e?.message || 'Google sign-in failed';
+      console.error('Google sign-in Firebase error:', e);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -118,7 +143,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* ── Single glass card (duplicate removed) ── */}
+        {/* ── Single glass card ── */}
         <div className="glass rounded-2xl p-6">
 
           {/* Tab: Email / Phone */}

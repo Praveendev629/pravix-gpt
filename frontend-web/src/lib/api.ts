@@ -1,8 +1,17 @@
 import axios from 'axios';
 
+// Fallback to the deployed backend if env var is not set
+const BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  'https://pravix-gpt-backend.vercel.app';
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000',
-  withCredentials: true,
+  baseURL: BASE_URL,
+  // ⚠️ withCredentials removed — backend uses JWT Bearer tokens, not cookies.
+  // Keeping withCredentials:true on a cross-origin request forces the browser
+  // to require Access-Control-Allow-Origin to match exactly (no wildcard, no
+  // trailing slash), which was causing all requests to be blocked by CORS.
+  withCredentials: false,
 });
 
 api.interceptors.request.use((config) => {
