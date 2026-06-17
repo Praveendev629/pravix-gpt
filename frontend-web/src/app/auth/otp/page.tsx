@@ -1,4 +1,6 @@
 "use client";
+export const dynamic = 'force-dynamic';
+
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,12 +15,19 @@ export default function OTPPage() {
   const [verified, setVerified] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [phone, setPhone] = useState('');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
-    inputRefs.current[0]?.focus();
+    // sessionStorage is only available in browser — safe inside useEffect
     const confirm = sessionStorage.getItem('pravix_otp_confirm');
-    if (!confirm) router.replace('/auth/login');
+    const savedPhone = sessionStorage.getItem('pravix_phone');
+    if (!confirm) {
+      router.replace('/auth/login');
+      return;
+    }
+    if (savedPhone) setPhone(savedPhone);
+    inputRefs.current[0]?.focus();
   }, [router]);
 
   const handleChange = (index: number, value: string) => {
@@ -34,8 +43,6 @@ export default function OTPPage() {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
-    if (e.key === 'ArrowLeft' && index > 0) inputRefs.current[index - 1]?.focus();
-    if (e.key === 'ArrowRight' && index < 5) inputRefs.current[index + 1]?.focus();
   };
 
   const handlePaste = (e: React.ClipboardEvent) => {
@@ -50,31 +57,33 @@ export default function OTPPage() {
 
   const handleVerify = async (code?: string) => {
     const otpCode = code || otp.join('');
-    if (otpCode.length !== 6) return;
-    if (loading) return;
+    if (otpCode.length !== 6 || loading) return;
     setLoading(true);
     setError('');
     try {
       const confirmation = (window as any).__pravixOTPConfirm;
-      if (!confirmation) { toast.error('OTP session expired. Please try again.'); router.replace('/auth/login'); return; }
-
+      if (!confirmation) {
+        toast.error('OTP session expired. Please try again.');
+        router.replace('/auth/login');
+        return;
+      }
       const result = await confirmation.confirm(otpCode);
       const idToken = await result.user.getIdToken();
 
-      // Mark as verified visually
       setVerified(true);
       toast.success('OTP Verified!');
 
-      // Store token temporarily, redirect to username entry
       sessionStorage.setItem('pravix_firebase_token', idToken);
       sessionStorage.removeItem('pravix_otp_confirm');
 
       setTimeout(() => router.push('/auth/username'), 1200);
-    } catch (e: any) {
+    } catch {
       setError('Invalid OTP. Please try again.');
       setOtp(['', '', '', '', '', '']);
       inputRefs.current[0]?.focus();
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -82,19 +91,17 @@ export default function OTPPage() {
       <div className="absolute top-1/3 left-1/3 w-80 h-80 bg-purple-700/15 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="relative z-10 w-full max-w-sm animate-slide-up">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4 transition-all duration-500 ${verified ? 'bg-green-500' : 'bg-gradient-to-br from-purple-600 to-red-500'}`}>
-            {verified ? <CheckCircle2 size={32} color="white"/> : <ShieldCheck size={32} color="white"/>}
+            {verified ? <CheckCircle2 size={32} color="white" /> : <ShieldCheck size={32} color="white" />}
           </div>
           <h1 className="text-2xl font-bold text-white">{verified ? 'Verified!' : 'Enter OTP'}</h1>
           <p className="text-white/40 text-sm mt-1">
-            {verified ? 'Phone number verified successfully' : `OTP sent to ${sessionStorage.getItem('pravix_phone') || 'your phone'}`}
+            {verified ? 'Phone number verified successfully' : `OTP sent to ${phone || 'your phone'}`}
           </p>
         </div>
 
         <div className="glass rounded-2xl p-6">
-          {/* OTP inputs */}
           <div className="flex gap-3 justify-center mb-6" onPaste={handlePaste}>
             {otp.map((digit, i) => (
               <div key={i} className="relative">
@@ -127,7 +134,7 @@ export default function OTPPage() {
           {loading && !verified && (
             <div className="text-center mb-4">
               <div className="flex gap-1 justify-center">
-                <span className="typing-dot"/><span className="typing-dot"/><span className="typing-dot"/>
+                <span className="typing-dot" /><span className="typing-dot" /><span className="typing-dot" />
               </div>
               <p className="text-white/40 text-xs mt-2">Verifying OTP...</p>
             </div>
@@ -141,9 +148,12 @@ export default function OTPPage() {
 
           {!verified && !loading && (
             <>
-              <button onClick={() => handleVerify()} disabled={otp.join('').length !== 6 || loading}
-                className="btn-primary w-full">
-                <ShieldCheck size={16}/> Verify OTP
+              <button
+                onClick={() => handleVerify()}
+                disabled={otp.join('').length !== 6 || loading}
+                className="btn-primary w-full"
+              >
+                <ShieldCheck size={16} /> Verify OTP
               </button>
               <button onClick={() => router.back()} className="btn-glass w-full mt-3 text-sm">
                 Resend OTP
