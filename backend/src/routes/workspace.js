@@ -4,7 +4,7 @@ const { protect } = require('../middleware/authMiddleware');
 const Project = require('../models/Project');
 const Groq = require('groq-sdk');
 const { v4: uuidv4 } = require('uuid');
-const archiver = require('archiver') ?? null;
+// archiver removed — not in package.json and not used in any active route
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
