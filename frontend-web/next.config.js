@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  images: { domains: ['lh3.googleusercontent.com', 'res.cloudinary.com'] },
+  transpilePackages: ['firebase', 'undici'],
+  images: {
+    domains: ['lh3.googleusercontent.com', 'res.cloudinary.com'],
+  },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
     NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -8,5 +11,9 @@ const nextConfig = {
     NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
     NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   },
+  experimental: {
+    serverComponentsExternalPackages: ['firebase-admin'],
+  },
 };
+
 module.exports = nextConfig;
