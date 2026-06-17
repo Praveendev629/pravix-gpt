@@ -12,16 +12,23 @@ const userRoutes = require('./routes/user');
 
 const app = express();
 
-// ── Required for Vercel / any reverse-proxy (fixes express-rate-limit warnings)
 app.set('trust proxy', 1);
-
-// ── Connect DB (cached — safe for serverless)
-connectDB().catch((err) => console.error('Initial DB connect failed:', err.message));
 
 // ── Security
 app.use(helmet());
 app.use(cors({
-  origin: process.env.CLIENT_URL || '*',
+  origin: (origin, callback) => {
+    const allowed = [
+      process.env.CLIENT_URL?.replace(/\/$/, ''),
+      'https://pravix-gpt.vercel.app',
+      'http://localhost:3000',
+    ].filter(Boolean);
+    if (!origin || allowed.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS blocked: ${origin}`));
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
 }));
@@ -33,8 +40,24 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ── Health
-app.get('/', (_req, res) => res.json({ status: 'Pravix GPT API Running', version: '1.0.0' }));
+// ── Health (no DB needed)
+app.get('/', (_req, res) =>
+  res.json({ status: 'Pravix GPT API Running', version: '1.0.0' })
+);
+
+// ✅ KEY FIX: Await DB connection before every API request
+// This replaces the fire-and-forget connectDB() at startup
+app.use('/api', async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('DB unavailable for request:', err.message);
+    res.status(503).json({
+      error: 'Service temporarily unavailable. Please try again.',
+    });
+  }
+});
 
 // ── Routes
 app.use('/api/auth', authRoutes);
@@ -48,7 +71,6 @@ app.use((err, _req, res, _next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
 });
 
-// ── Only bind a port when running locally (not on Vercel serverless)
 if (require.main === module) {
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => console.log(`Pravix GPT API running on port ${PORT}`));
