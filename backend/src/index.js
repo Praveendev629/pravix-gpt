@@ -1,20 +1,22 @@
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const connectDB = require('./config/db');
+const express    = require('express');
+const cors       = require('cors');
+const helmet     = require('helmet');
+const rateLimit  = require('express-rate-limit');
+const connectDB  = require('./config/db');
 
-const authRoutes = require('./routes/auth');
-const chatRoutes = require('./routes/chat');
+// ── Route imports
+const authRoutes      = require('./routes/auth');
+const chatRoutes      = require('./routes/chat');
 const workspaceRoutes = require('./routes/workspace');
-const userRoutes = require('./routes/user');
+const userRoutes      = require('./routes/user');
+const imageRoutes     = require('./routes/image'); // ✅ import only — do NOT register yet
 
 const app = express();
 
 app.set('trust proxy', 1);
 
-// ── Security
+// ── Security middleware (must come first)
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
@@ -37,16 +39,16 @@ app.use(cors({
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
 app.use(limiter);
 
+// ── Body parsers  ← imageRouter needs this, so must be BEFORE route registration
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ── Health (no DB needed)
+// ── Health check (no DB needed)
 app.get('/', (_req, res) =>
   res.json({ status: 'Pravix GPT API Running', version: '1.0.0' })
 );
 
-// ✅ KEY FIX: Await DB connection before every API request
-// This replaces the fire-and-forget connectDB() at startup
+// ── DB connection middleware (applied to all /api routes)
 app.use('/api', async (req, res, next) => {
   try {
     await connectDB();
@@ -59,13 +61,14 @@ app.use('/api', async (req, res, next) => {
   }
 });
 
-// ── Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/chat', chatRoutes);
+// ── Routes  ← ALL registered after middleware
+app.use('/api/auth',      authRoutes);
+app.use('/api/chat',      chatRoutes);
 app.use('/api/workspace', workspaceRoutes);
-app.use('/api/user', userRoutes);
+app.use('/api/user',      userRoutes);
+app.use('/api/image',     imageRoutes); // ✅ now gets body parser + CORS + helmet + rate limit + DB
 
-// ── Error handler
+// ── Global error handler
 app.use((err, _req, res, _next) => {
   console.error(err.stack);
   res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
