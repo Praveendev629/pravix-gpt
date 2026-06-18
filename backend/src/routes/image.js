@@ -1,84 +1,91 @@
 // routes/image.js
-const express    = require('express');
-const router     = express.Router();
-const OpenAI     = require('openai');
-const cloudinary = require('cloudinary').v2;
-const authMiddleware = require('../middleware/auth');
+const express        = require('express');
+const router         = express.Router();
+const Groq           = require('groq-sdk');
+const { protect }    = require('../middleware/authMiddleware');
 
-// ── Clients
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// ── Groq client (used for prompt enhancement)
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key:    process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,  // server-side only — never expose to client
-});
+// ── Helper: enhance prompt via Groq before sending to image model
+async function enhancePrompt(rawPrompt) {
+  try {
+    const chat = await groq.chat.completions.create({
+      model: 'llama3-8b-8192',
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a creative image prompt engineer. ' +
+            'Given a short idea, expand it into a vivid, detailed image generation prompt (2–3 sentences max). ' +
+            'Reply with ONLY the improved prompt, no explanations.',
+        },
+        { role: 'user', content: rawPrompt },
+      ],
+      max_tokens: 200,
+      temperature: 0.7,
+    });
+    return chat.choices[0]?.message?.content?.trim() || rawPrompt;
+  } catch {
+    // If Groq fails, fall back to original prompt
+    return rawPrompt;
+  }
+}
 
 // ── POST /api/image/generate
-router.post('/generate', authMiddleware, async (req, res) => {
-  const { prompt, userId } = req.body;
+router.post('/generate', protect, async (req, res) => {
+  const { prompt, width = 1024, height = 1024, enhance = true } = req.body;
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
     return res.status(400).json({ error: 'prompt is required' });
   }
 
   try {
-    // ── Step 1: Generate image with DALL-E 3
-    const aiResp = await openai.images.generate({
-      model:   'dall-e-3',
-      prompt:  prompt.trim(),
-      n:       1,              // DALL-E 3 only supports n=1
-      size:    '1024x1024',
-      quality: 'standard',
-    });
+    // ── Step 1: Optionally enhance the prompt via Groq
+    const finalPrompt = enhance ? await enhancePrompt(prompt.trim()) : prompt.trim();
 
-    const tempUrl = aiResp.data[0].url;
-    if (!tempUrl) throw new Error('OpenAI returned no image URL');
+    // ── Step 2: Generate image via Pollinations.ai (free, no API key needed)
+    // Docs: https://pollinations.ai/  — returns the image directly at the URL
+    const encodedPrompt = encodeURIComponent(finalPrompt);
+    const seed          = Math.floor(Math.random() * 1_000_000);
+    const imageUrl      = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
 
-    // ── Step 2: Upload to Cloudinary from the temp URL
-    // NOTE: Do NOT pass upload_preset here — that's for unsigned (client-side) uploads.
-    //       When api_secret is configured the upload is already signed automatically.
-    const uploaded = await cloudinary.uploader.upload(tempUrl, {
-      folder:  'pravix-gpt/ai-generated',
-      tags:    ['ai-generated', `user:${userId ?? 'anonymous'}`],
-      // ✅ context as object — safe even if prompt contains = or | characters
-      context: {
-        prompt:  prompt.slice(0, 200),
-        user_id: userId ?? 'anonymous',
-      },
-    });
-
-    // ── Step 3 (optional): Save to DB
-    // await ImageModel.create({
-    //   userId,
-    //   prompt,
-    //   publicId: uploaded.public_id,
-    //   url:      uploaded.secure_url,
-    //   width:    uploaded.width,
-    //   height:   uploaded.height,
-    // });
-
+    // Verify the URL is reachable (HEAD request)
+    // Pollinations generates the image on-the-fly when the URL is requested,
+    // so we just return the URL — the client fetches it directly.
     return res.json({
-      imageUrl: uploaded.secure_url,
-      publicId: uploaded.public_id,
-      prompt:   prompt.trim(),
-      width:    uploaded.width,
-      height:   uploaded.height,
+      imageUrl,
+      originalPrompt: prompt.trim(),
+      enhancedPrompt: finalPrompt,
+      width,
+      height,
+      seed,
+      provider: 'pollinations.ai',
     });
 
   } catch (err) {
     console.error('Image generation error:', err);
 
-    // Give a clear message for common errors
-    if (err.message?.includes('billing')) {
-      return res.status(402).json({ error: 'OpenAI billing issue — check your API key usage limits.' });
-    }
     if (err.message?.includes('content_policy')) {
       return res.status(400).json({ error: 'Prompt was rejected by content policy. Please rephrase.' });
     }
 
     return res.status(500).json({ error: err.message ?? 'Image generation failed' });
   }
+});
+
+// ── GET /api/image/generate  (quick URL-based generation — no auth needed)
+// Usage: /api/image/generate?prompt=sunset+over+mountains
+router.get('/generate', async (req, res) => {
+  const { prompt, width = 1024, height = 1024 } = req.query;
+
+  if (!prompt) return res.status(400).json({ error: 'prompt query param is required' });
+
+  const encodedPrompt = encodeURIComponent(prompt);
+  const seed          = Math.floor(Math.random() * 1_000_000);
+  const imageUrl      = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&seed=${seed}&nologo=true`;
+
+  return res.json({ imageUrl, prompt, width: Number(width), height: Number(height), seed });
 });
 
 module.exports = router;

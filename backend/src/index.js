@@ -20,19 +20,29 @@ app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+
     const allowed = [
       process.env.CLIENT_URL?.replace(/\/$/, ''),
       'https://pravix-gpt.vercel.app',
       'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:5174',
     ].filter(Boolean);
-    if (!origin || allowed.includes(origin)) {
+
+    if (allowed.includes(origin)) {
       callback(null, true);
     } else {
+      // In production allow all origins from vercel.app preview URLs
+      if (origin.endsWith('.vercel.app')) return callback(null, true);
+      console.warn(`CORS blocked origin: ${origin}`);
       callback(new Error(`CORS blocked: ${origin}`));
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 // ── Rate limiting
