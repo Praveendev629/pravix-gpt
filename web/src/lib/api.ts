@@ -1,7 +1,9 @@
 import axios from "axios";
 import { auth } from "./firebase";
 
-const API = axios.create({ baseURL: process.env.NEXT_PUBLIC_BACKEND_URL });
+const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+const API = axios.create({ baseURL: BACKEND });
 
 API.interceptors.request.use(async (config) => {
   const user = auth.currentUser;
@@ -13,6 +15,25 @@ API.interceptors.request.use(async (config) => {
 });
 
 export default API;
+
+export interface AIModel { id: string; name: string; vision: boolean; }
+
+export async function getModels(): Promise<AIModel[]> {
+  try {
+    const { data } = await API.get("/api/chat/models");
+    return data.models || [];
+  } catch {
+    // Fallback free models if backend unreachable
+    return [
+      { id: "llama-3.1-8b-instant",          name: "Llama 3.1 8B (Fast - Free)",     vision: false },
+      { id: "llama-3.3-70b-versatile",        name: "Llama 3.3 70B (Best - Free)",    vision: false },
+      { id: "gemma2-9b-it",                   name: "Gemma 2 9B (Google - Free)",     vision: false },
+      { id: "mixtral-8x7b-32768",             name: "Mixtral 8x7B (Long ctx - Free)", vision: false },
+      { id: "deepseek-r1-distill-llama-70b",  name: "DeepSeek R1 (Reasoning - Free)", vision: false },
+      { id: "llama-3.2-11b-vision-preview",   name: "Llama Vision (Images - Free)",   vision: true  },
+    ];
+  }
+}
 
 export async function getHistory() {
   const { data } = await API.get("/api/history");
@@ -53,7 +74,7 @@ export async function streamChat(params: {
   onError: (err: string) => void;
 }) {
   const token = await auth.currentUser?.getIdToken();
-  const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/chat/stream`, {
+  const response = await fetch(`${BACKEND}/api/chat/stream`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -67,6 +88,12 @@ export async function streamChat(params: {
       imageBase64: params.imageBase64
     })
   });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({ error: "Backend connection failed. Is the server running?" }));
+    params.onError(err.error || "Connection failed");
+    return;
+  }
 
   const reader = response.body?.getReader();
   const decoder = new TextDecoder();
