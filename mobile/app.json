@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "PRAVIX AI",
+    "slug": "pravix-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/logo.jpg",
+    "scheme": "pravixai",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.praveen.pravixai"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.praveen.pravixai"
+    },
+    "web": { "bundler": "metro" },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      ["expo-image-picker", { "photosPermission": "Allow PRAVIX AI to access your photos." }],
+      ["expo-document-picker", { "iCloudContainerEnvironment": "Production" }]
+    ],
+    "experiments": { "typedRoutes": true }
+  }
+}
